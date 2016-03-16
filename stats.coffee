@@ -4,6 +4,7 @@
   Any trading algorithm needs to implement two methods:
     init(context) and handle(context,data)
 ###
+
 class UTILS
 
   ## str_repeat : return a string with n occurences of char
@@ -15,27 +16,42 @@ class UTILS
     out
 
   debugInc = 0 # initial indentation
-  @debug: (obj) ->
-    return debug(obj) if typeof obj is 'string'
-
-    `console.log(obj)` if debugInc == 0
+  ## debug : dump a string, an object...
+  @debug: (obj, maxLevel=9) ->
     debugInc++
+    obj_type = typeof obj
+
+    if debugInc > maxLevel
+      debugInc--
+      return
+
+    if obj_type is 'string' or obj_type is 'number'
+      debug(obj)
+      debugInc--
+      return
+
     space = @repeat('.', debugInc);
 
-    debug "debug ##{obj}"
-    for own key of obj
-      debug "#{space} #{key} --> "
-      @debug(obj[key])
+    nbElement = 0
+    for own key, val of obj
+      nbElement++
+      break if nbElement > 10
+      obj_type = typeof val
+      if obj_type is 'string' or obj_type is 'number'
+        debug(space+" "+key+" --> " +val)
+      else
+        debug "#{space} #{key} --> "
+        @debug(val, maxLevel)
     debugInc--
 
+    
   @getCapital: ->
-    instrument = data.instruments[0]
+    instrument = @data.instruments[0]
     price = instrument.price
     debug " #{price} at  ##{data.at}"
-    @debug(portfolio.positions)
-    curAmount = portfolio.positions[instrument.curr()].amount
-    btcAmount = portfolio.positions[instrument.asset()].amount
-    price = instrument.price
+    @debug(@portfolio.positions)
+    curAmount = @portfolio.positions[instrument.curr()].amount
+    btcAmount = @portfolio.positions[instrument.asset()].amount
 
     capital = curAmount + btcAmount * price
 
@@ -56,7 +72,10 @@ init: (context)->
       color: 'orange'
 
 # This method is called on each tick
-handle: (context, data, storage)->
+handle: ->
+
+  trading = require "trading"
+
   ###
   context - object that holds current script state
   data - allows to access current trading environment
@@ -65,11 +84,23 @@ handle: (context, data, storage)->
   storage - the object is used to persist variable data in the database
   ###
   capital = UTILS.getCapital()
-  efficiency = context.initial_capital * 100 / capital
+  efficiency = @context.initial_capital * 100 / capital
 
   plot
     capital: capital
     efficiency: efficiency
+
+
+  instrument = @data.instruments[0]
+  cash = @portfolio.positions[instrument.curr()].amount
+
+  #if @portfolio.positions[instrument.asset()].amount > 0
+  if trading.sell instrument
+    debug 'SELL order traded'
+  else  if trading.buy instrument, 'limit', cash / 2 / instrument.price, instrument.price
+    debug 'BUY order traded'
+
+
 
   debug UTILS.repeat('-', 20)
 
