@@ -1,5 +1,7 @@
 trading = require "trading"
 
+trades = []
+
 class UTILS
 
   ## str_repeat : return a string with n occurences of char
@@ -53,6 +55,14 @@ class UTILS
   @getEfficiency: ->
     efficiency = @getCapital() / context.initial_capital
 
+  ## get current price
+  @getPrice: ->
+    instrument = data.instruments[0]
+    price = instrument.price
+
+  ## get B/H efficiency
+  @getBHEfficiency: ->
+    efficiency = @getPrice() / context.initial_price
 
 # Initialization method called before a simulation starts.
 # Context object holds script data and will be passed to 'handle' method.
@@ -137,9 +147,12 @@ handle: ->
       volume:
 
   ###
+  instrument = data.instruments[0]
+
 
   ## keep track of initial balance
   context.initial_capital = UTILS.getCapital() if not context.initial_capital
+  context.initial_price = instrument.price if not context.initial_price
 
   capital = UTILS.getCapital()
   efficiency = UTILS.getEfficiency() - 1
@@ -152,24 +165,38 @@ handle: ->
 
 
   ## trading logic part
-  instrument = data.instruments[0]
   cash = portfolio.positions[instrument.curr()].amount
+
+  # cancel pending order
+  #active_orders = trading.getActiveOrders
+  #trading.cancelOrder(order) for order in active_orders
+
+  last_buy_price = 0
+  buy_trades = (trade for trade in trades when trade.type is "buy")
+  if buy_trades.length
+    [ first, ..., last_buy_trade ] = buy_trades
+    #UTILS.debug(last_buy_trade)
+    last_buy_price = last_buy_trade.price
 
 
   if portfolio.positions[instrument.asset()].amount * instrument.price > context.min_transaction_amount
-    if trading.sell instrument
+    if instrument.price > last_buy_price and trading.sell instrument, 'limit', portfolio.positions[instrument.asset()].amount, instrument.price
       debug 'SELL order traded'
-
+      trades.push({type:"sell", price:instrument.price})
 
   ## buy ALL
   else if trading.buy instrument, 'limit', cash / instrument.price, instrument.price
     debug 'BUY order traded'
+    trades.push({type:"buy", price:instrument.price})
+
 
 
   ## logging part
   #UTILS.debug(data: data)
   #UTILS.debug(portfolio : portfolio)
   #UTILS.debug(instrument : instrument)
+  #UTILS.debug(trades : trades)
+
 
   debug "-- Tick ##{context.tick}"+UTILS.repeat('-', 20)
 
@@ -178,3 +205,4 @@ onStop: ->
   debug context.initial_capital
   debug UTILS.getCapital()
   debug "P/L "+UTILS.getEfficiency()
+  debug "B/H "+UTILS.getBHEfficiency()
