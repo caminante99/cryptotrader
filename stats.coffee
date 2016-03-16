@@ -53,7 +53,7 @@ class UTILS
 
   ## return current efficiency
   @getEfficiency: ->
-    efficiency = @getCapital() / context.initial_capital
+    @getCapital() / context.initial_capital
 
   ## get current price
   @getPrice: ->
@@ -62,7 +62,19 @@ class UTILS
 
   ## get B/H efficiency
   @getBHEfficiency: ->
-    efficiency = @getPrice() / context.initial_price
+    @getPrice() / context.initial_price
+
+  ## get current P/L
+  @getCurrentTradeEfficiency: ->
+    last_buy_price = 0
+    buy_trades = (trade for trade in trades when trade.type is "buy")
+    if buy_trades.length
+      [ first, ..., last_buy_trade ] = buy_trades
+      #UTILS.debug(last_buy_trade)
+      last_buy_price = last_buy_trade.price
+
+    @getPrice() / last_buy_price
+
 
 # Initialization method called before a simulation starts.
 # Context object holds script data and will be passed to 'handle' method.
@@ -70,6 +82,8 @@ init: ->
 
   context.tick = 0
   context.min_transaction_amount = 0.01 # in BTC
+  context.allowed_loss = 1 # %
+
 
   #UTILS.debug(context)
 
@@ -171,16 +185,10 @@ handle: ->
   #active_orders = trading.getActiveOrders
   #trading.cancelOrder(order) for order in active_orders
 
-  last_buy_price = 0
-  buy_trades = (trade for trade in trades when trade.type is "buy")
-  if buy_trades.length
-    [ first, ..., last_buy_trade ] = buy_trades
-    #UTILS.debug(last_buy_trade)
-    last_buy_price = last_buy_trade.price
 
 
   if portfolio.positions[instrument.asset()].amount * instrument.price > context.min_transaction_amount
-    if instrument.price > last_buy_price and trading.sell instrument, 'limit', portfolio.positions[instrument.asset()].amount, instrument.price
+    if UTILS.getCurrentTradeEfficiency() > (100-context.allowed_loss)/100 and trading.sell instrument, 'limit', portfolio.positions[instrument.asset()].amount, instrument.price
       debug 'SELL order traded'
       trades.push({type:"sell", price:instrument.price})
 
