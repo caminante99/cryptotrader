@@ -1,9 +1,4 @@
-###
-  Strategy Template
-  The script engine is based on CoffeeScript (http://coffeescript.org)
-  Any trading algorithm needs to implement two methods:
-    init(context) and handle(context,data)
-###
+trading = require "trading"
 
 class UTILS
 
@@ -44,63 +39,142 @@ class UTILS
         @debug(val, maxLevel)
     debugInc--
 
-    
+  ## return current capital
   @getCapital: ->
-    instrument = @data.instruments[0]
+    instrument = data.instruments[0]
     price = instrument.price
-    debug " #{price} at  ##{data.at}"
-    @debug(@portfolio.positions)
-    curAmount = @portfolio.positions[instrument.curr()].amount
-    btcAmount = @portfolio.positions[instrument.asset()].amount
-
+    #debug " #{price} at  ##{data.at}"
+    #@debug(portfolio.positions)
+    curAmount = portfolio.positions[instrument.curr()].amount
+    btcAmount = portfolio.positions[instrument.asset()].amount
     capital = curAmount + btcAmount * price
+
+  ## return current efficiency
+  @getEfficiency: ->
+    efficiency = @getCapital() / context.initial_capital
 
 
 # Initialization method called before a simulation starts.
 # Context object holds script data and will be passed to 'handle' method.
-init: (context)->
-  # do nothing
-  context.balance = 0
-  context.limit = 20
+init: ->
 
-  context.initial_capital = UTILS.getCapital()
+  context.tick = 0
+  context.min_transaction_amount = 0.01 # in BTC
+
+  #UTILS.debug(context)
 
   setPlotOptions
     capital:
-      color: 'green'
+      secondary : true
+      color: 'blue'
     efficiency:
+      secondary : true
       color: 'orange'
+
 
 # This method is called on each tick
 handle: ->
 
-  trading = require "trading"
+  context.tick++
 
   ###
-  context - object that holds current script state
-  data - allows to access current trading environment
-    data.at - current time in milliseconds
-    data.portfolio - Portfolio object
-  storage - the object is used to persist variable data in the database
+  portfolio --> 
+    positions --> 
+      eth --> 
+        initial --> 0
+        amount --> 0
+      xbt --> 
+        initial --> 1000
+        amount --> 1000
+  
+  
+  DATA
+    pair :
+      market : kraken
+      id : pair
+      interval : 5
+      open : []
+      low : []
+      high : []
+      close : []
+      volumes : []
+      ticks : [
+        0: 
+          at: ts
+          open:
+          low: 
+          high:
+          close:
+          volume:
+      ]
+      pair : [ xbt, eur]
+    instruments : [
+      market:kraken
+      id:eth_xbt
+      interval:5
+      open: []
+      low : []
+      high : []
+      close : []
+      volumes : []
+      ticks : [
+        0: 
+          at: ts
+          open:
+          low: 
+          high:
+          close:
+          volume:
+      ]
+    ]
+    at: ts
+    tick: 
+      at: ts
+      open:
+      low: 
+      high:
+      close:
+      volume:
+
   ###
+
+  ## keep track of initial balance
+  context.initial_capital = UTILS.getCapital() if not context.initial_capital
+
   capital = UTILS.getCapital()
-  efficiency = @context.initial_capital * 100 / capital
+  efficiency = UTILS.getEfficiency() - 1
 
+  ## UI part
   plot
     capital: capital
     efficiency: efficiency
 
 
-  instrument = @data.instruments[0]
-  cash = @portfolio.positions[instrument.curr()].amount
 
-  #if @portfolio.positions[instrument.asset()].amount > 0
-  if trading.sell instrument
-    debug 'SELL order traded'
-  else  if trading.buy instrument, 'limit', cash / 2 / instrument.price, instrument.price
+  ## trading logic part
+  instrument = data.instruments[0]
+  cash = portfolio.positions[instrument.curr()].amount
+
+
+  if portfolio.positions[instrument.asset()].amount * instrument.price > context.min_transaction_amount
+    if trading.sell instrument
+      debug 'SELL order traded'
+
+
+  ## buy ALL
+  else if trading.buy instrument, 'limit', cash / instrument.price, instrument.price
     debug 'BUY order traded'
 
 
+  ## logging part
+  #UTILS.debug(data: data)
+  #UTILS.debug(portfolio : portfolio)
+  #UTILS.debug(instrument : instrument)
 
-  debug UTILS.repeat('-', 20)
+  debug "-- Tick ##{context.tick}"+UTILS.repeat('-', 20)
 
+
+onStop: ->
+  debug context.initial_capital
+  debug UTILS.getCapital()
+  debug "P/L "+UTILS.getEfficiency()
